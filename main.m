@@ -88,8 +88,8 @@ diagonal = true;
                              
 ell = 10;    % length of the space interval
 Ne = 20;     % number of elements
-T = 30;      % end of the time interval
-ht = 0.01;   % time step
+T = 10;      % end of the time interval
+ht = 0.1;   % time step
 
 %% curvature before deformation
 kap = [0; 0; 0];  % curvature before deformation
