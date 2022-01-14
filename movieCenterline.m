@@ -1,8 +1,10 @@
-function f_c = movieCenterline(p, R, centerline_t, viewCent, locLegend, titleCenterline, Nx, t)
+function f_c = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline, t)
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
 
     Nt = numel(t);
+    Nx = size(p, 2);
+    ht = t(2) - t(1);
     create_movie = true;
     
     if create_movie
@@ -29,39 +31,43 @@ function f_c = movieCenterline(p, R, centerline_t, viewCent, locLegend, titleCen
     % for t in [0, 2*pi)
     % position in space is thus: p0(x) + R0(x)*(0, r*cos(s), r*sin(s))
     % for x in [0, \ell], s in [0, 2*pi)
-    Ns = 25;
+    Ns = 100;
     s_list = linspace(0,2*pi,Ns); % the angles 
-    circ = zeros(3, Ns, Nx, Nt);
+    circ = zeros(3, Nx, Ns, Nt);
     for pp = 1:Ns
         s = s_list(pp); % one angle
         cross_pos = [0; r*cos(s); r*sin(s)];
         for nn = 1:Nt
             for kk = 1:Nx
-                circ(:, pp, kk, nn) = p(:, kk, nn) + R(:, :, kk, nn)*cross_pos;
+                circ(:, kk, pp, nn) = p(:, kk, nn) + R(:, :, kk, nn)*cross_pos;
             end
         end
     end
     
-    for nn = centerline_t(1):10:centerline_t(end)
+    for nn = t_idx(1):(1/ht/10):t_idx(end)
         
         figure(2) %%% ADD THIS HERE otherwise it will plot in fig 1 for kk>1 (because of the hold off) 
         
-        plot3(p(1, :, nn), p(2, :, nn), p(3, :, nn), 'k', 'lineWidth', 1);
-        hold on;
-%         %%% plot cross sections:
-%         for kk = 1:Nx
-%             axe_circ = plot3(circ(1, :, kk, nn), circ(2, :, kk, nn),...
-%                 circ(3, :, kk, nn), 'linewidth', 2, 'Color','b');
-%             axe_circ.Color(4) = 0.1;
-%         end
+        %%% plot cross sections:
+        for pp = 1:Ns
+            axe_circ = plot3(circ(1, :, pp, nn), circ(2, :, pp, nn),...
+                circ(3, :, pp, nn), 'linewidth', 2, 'Color','b');
+            axe_circ.Color(4) = 0.01;
+            hold on;
+        end
+        plot3(p(1, :, nn), p(2, :, nn), p(3, :, nn), 'r', 'lineWidth', 1);
+        for ss = 1:(1/ht/10):nn-1
+            hist = plot3(p(1, :, ss), p(2, :, ss), p(3, :, ss), 'k:', 'lineWidth', 1);
+            hist.Color(4) = 0.25;
+        end
         
+        pp = permute(p, [1, 3, 2]);
+        plot3(pp(1, 1:nn, 1), pp(2, 1:nn, 1), pp(3, 1:nn, 1), ':b', 'lineWidth', 1.5);
+        plot3(pp(1, 1:nn, Nx), pp(2, 1:nn, Nx), pp(3, 1:nn, Nx), ':r', 'lineWidth', 1.5);
         
         grid on;
         axis equal;
         %view(gca, viewCent);
-%         xlim([0, 50]);
-%         ylim([0, 5]);
-%         zlim([-5, 5]);
         xlim([x_min, x_max]);
         ylim([y_min, y_max]);
         zlim([z_min, z_max]);
@@ -70,17 +76,6 @@ function f_c = movieCenterline(p, R, centerline_t, viewCent, locLegend, titleCen
         zlabel('Z', 'Interpreter', 'latex');
         title(titleCenterline, 'Interpreter', 'latex', 'fontsize', 12);
         hold off;
-%         view(2)
-%         title(['t = ', num2str(time(kk)), ' [s]'])
-%         xlabel 'x [m]'
-%         ylabel 'y [m]'
-%         axis tight
-%         hcb = colorbar();
-%         ylabel(hcb,'concentration of Cl [mg/l]')
-%         colormap default
-%         shading interp
-%         axis equal
-%         hold off
 
         if create_movie
             frame = getframe(fig);
