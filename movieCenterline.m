@@ -68,9 +68,17 @@ function f_c = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline
         grid on;
         axis equal;
         %view(gca, viewCent);
-        xlim([x_min, x_max]);
-        ylim([y_min, y_max]);
-        zlim([z_min, z_max]);
+        
+        if x_max>x_min
+            xlim([x_min, x_max]);
+        end
+        if y_max>y_min
+            ylim([y_min, y_max]);
+        end
+        if z_max>z_min
+            zlim([z_min, z_max]);
+        end
+        
         xlabel('X', 'Interpreter', 'latex');
         ylabel('Y', 'Interpreter', 'latex');
         zlabel('Z', 'Interpreter', 'latex');
