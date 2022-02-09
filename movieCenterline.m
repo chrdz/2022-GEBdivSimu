@@ -1,4 +1,4 @@
-function f_c = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline, t)
+function fig = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline, t)
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -17,16 +17,16 @@ function f_c = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline
         set(fig,'color','w');
     end
     
-    x_min = min(min(p(1, :, :)));
-    x_max = max(max(p(1, :, :)));
-    y_min = min(min(p(2, :, :)));
-    y_max = max(max(p(2, :, :)));
-    z_min = min(min(p(3, :, :)));
-    z_max = max(max(p(3, :, :)));
+    x_min = min(min(p(1, :, t_idx)));
+    x_max = max(max(p(1, :, t_idx)));
+    y_min = min(min(p(2, :, t_idx)));
+    y_max = max(max(p(2, :, t_idx)));
+    z_min = min(min(p(3, :, t_idx)));
+    z_max = max(max(p(3, :, t_idx)));
     
     
 %     r = 0.025; % radius
-    r = 0.1; % radius
+    r = 0.25; % radius
     % border of the cross section is s \mapsto (0, r*cos(s), r*sin(s))
     % for t in [0, 2*pi)
     % position in space is thus: p0(x) + R0(x)*(0, r*cos(s), r*sin(s))
@@ -51,19 +51,19 @@ function f_c = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline
         %%% plot cross sections:
         for pp = 1:Ns
             axe_circ = plot3(circ(1, :, pp, nn), circ(2, :, pp, nn),...
-                circ(3, :, pp, nn), 'linewidth', 2, 'Color','b');
+                circ(3, :, pp, nn), 'linewidth', 2, 'Color','g');
             axe_circ.Color(4) = 0.01;
             hold on;
         end
-        plot3(p(1, :, nn), p(2, :, nn), p(3, :, nn), 'r', 'lineWidth', 1);
+        plot3(p(1, :, nn), p(2, :, nn), p(3, :, nn), 'g', 'lineWidth', 0.75);
         for ss = 1:(1/ht/10):nn-1
-            hist = plot3(p(1, :, ss), p(2, :, ss), p(3, :, ss), 'k:', 'lineWidth', 1);
+            hist = plot3(p(1, :, ss), p(2, :, ss), p(3, :, ss), 'k', 'lineWidth', 0.75);
             hist.Color(4) = 0.25;
         end
         
         pp = permute(p, [1, 3, 2]);
-        plot3(pp(1, 1:nn, 1), pp(2, 1:nn, 1), pp(3, 1:nn, 1), ':b', 'lineWidth', 1.5);
-        plot3(pp(1, 1:nn, Nx), pp(2, 1:nn, Nx), pp(3, 1:nn, Nx), ':r', 'lineWidth', 1.5);
+        plot3(pp(1, 1:nn, 1), pp(2, 1:nn, 1), pp(3, 1:nn, 1), ':b', 'lineWidth', 1);
+        plot3(pp(1, 1:nn, Nx), pp(2, 1:nn, Nx), pp(3, 1:nn, Nx), ':r', 'lineWidth', 1);
         
         grid on;
         axis equal;
