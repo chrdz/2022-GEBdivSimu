@@ -53,38 +53,48 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%
-clear all
+clear
 close all
 clc
 fs = 14; % font size
 size_line = 2; % line size for plots;
 
 %% To be chosen
-linearized = false;     % true: we take the IGEB system without g(y)
-                        % false: we take the real (semilinear) IGEB system
-plot_y = true;     % true: we plot the solution y
-                   % false: we don't plot the solution y
-plot_centerline = true;   % true: we plot the centerline of the beam
-                          % false: we don't plot the centerline
-                          
-plot_norm = false;
+% Do you want the linearized system?
+linearized = false;  % true: we take the IGEB system without g(y)
+                     % false: we take the real (semilinear) IGEB system
+            
+% What do you want to plot?
+plot_y = true;          % true: we plot the solution y
+                        % false: we don't plot it
+plot_centerline = true; % true: we plot the centerline of the beam
+                        % false: we don't plot it                        
+plot_norm = false;      % true: we plot the norm of y(., t) through time
+                        % we don't plot it
+plot_boundary = false;   % we plot the value of y at x=0 through time
+                        % we don't plot it
 
+% Which scheme for recovering displacement variables?                        
 centerline_t_scheme = 0;     % 0: mid point rule
-                             % 1: explicit Euler      (does not work properly)
+                             % 1: explicit Euler (does not work properly)
                              % 2: ode45 (RK)
                              % 3: implicit Euler
-                             % 4: zupan paper scheme  (does not work properly)           
-centerline_x_scheme = 0;
+                             % 4: zupan paper scheme (does not work properly)           
+centerline_x_scheme = 0;     % 0: mid point rule
+                             % 1: explicit Euler (does not work properly)
 
+% Which problem do you want to solve
 problem = 1;    % 0: flying spaghetti problem 2D
                 % 1: flying spaghetti problem 3D
                 % 2: book
                 % 3: TODO the feedback control problem
-                
+
+% How do you write the Newton scheme?
 approx_rot = 0;    % 0 most precise: mid point everywhere
                    % 1 no mid point for Rfext in W1m
                    % 2 no mid point for Rfext in W1m and in calU(v2)
-                
+
+% Do you want to work with the diagonal system?      
 diagonal = true;   % true: we diagonalize the system before solving
                    % false: we work directly with the physical system
                              
@@ -104,7 +114,7 @@ boldE = zeros(6, 6); boldE(5, 3) = -1; boldE(6, 2) = 1;   % initial strain matri
 % Henrik Hesse, Rafael Palacios, 2012
 % ---------------------------------------- %
 EA = 10^4; GAs = 10^4;
-if problem == 0 | problem == 1
+if problem == 0 || problem == 1
     EI = 500; GJ = 500;
 elseif problem == 2
     EI = 1000; GJ = 1000;
@@ -128,7 +138,7 @@ if diagonal == true
     d_G = @(r, M, C) d_L*G(d_Linv*r, M, C)*d_Linv;
     d_Gdagger = @(r, M, C) d_L*Gdagger(d_Linv*r, M, C)*d_Linv;
     d_B = d_L*B*d_Linv;
-    if problem == 0 | problem == 1
+    if problem == 0 || problem == 1
         d_W1 = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
         d_W2 = -d_D*[[eye(6), zeros(6)]; [eye(6), zeros(6)]];
         d_W3 = sqrt(2)*[zeros(6); eye(6)];
@@ -188,7 +198,7 @@ if diagonal == true
         end
     end
 else
-    if problem == 0 | problem == 1
+    if problem == 0 || problem == 1
         for ii = 1:6
             U(NNB(ii, 1), ii) = U(NNB(ii, 1), ii) + 1;
             K(NNB(ii+6, 1), NNB(ii, 1)) = K(NNB(ii+6, 1), NNB(ii, 1)) + 1;
@@ -207,11 +217,15 @@ if diagonal == true
     NNBc = NNB;
     dof = 1:Ntot;
 else
-    if problem == 0 | problem == 1 | problem == 2
+    if problem == 0 || problem == 1 || problem == 2
         Nf = Ntot-6;
         NNBc = NNB;
         NNBc(7:12, Nx) = 0;
         dof = 1:Ntot-6;
+    elseif problem == 3
+        NNBc = NNB-6; 
+        NNBc = subplus(NNBc);
+        dof = 7:Ntot;
     end
     
     % NNBc = NNB-6; % with the Dirichlet BC
@@ -262,7 +276,7 @@ Y0 = zeros(Ntot, 1);
 %%% ----------- (p0, R0) and (pD, RD) ----------- %%%
 p_ref = x.*[1; 0; 0];
 
-if problem == 0 | problem == 1  
+if problem == 0 || problem == 1  
     cosa = 6/10; sina = 8/10;
     p0 = [[-cosa, -sina, 0]; [sina, -cosa, 0]; [0, 0, 1]]*(p_ref)  + [6; 0; 0];
     R0 = zeros(3, 3, Nx);
@@ -673,25 +687,27 @@ if plot_norm == true
 end
 
 %% Y at boundary
-if problem == 0 || problem == 1
-    Z1 = zeros(3, Nt);
-    Z2 = zeros(3, Nt);
-    for kk = 1:Nt
-        Z1(:, kk) = R(:, :, kk, 1)*Y_phys(NNB(7:9, 1), kk);
-        Z2(:, kk) = R(:, :, kk, 1)*Y_phys(NNB(10:12, 1), kk);
+if plot_boundary == true
+    if problem == 0 || problem == 1
+        Z1 = zeros(3, Nt);
+        Z2 = zeros(3, Nt);
+        for kk = 1:Nt
+            Z1(:, kk) = R(:, :, kk, 1)*Y_phys(NNB(7:9, 1), kk);
+            Z2(:, kk) = R(:, :, kk, 1)*Y_phys(NNB(10:12, 1), kk);
+        end
+        figure()
+        plot(t, Z1(1, :));
+        hold on;
+        plot(t, Z2(2, :));
+        plot(t, Z2(3, :));
+        legend('7, x=0', '8, x=0', '12, x=0');
+        title('Value of Y at x=0')
+    elseif problem == 2
+        figure()
+        plot(t, Y_phys(NNB(6, 1), :));
+        legend('6, x=0');
+        title('Value of Y at x=0')
     end
-    figure()
-    plot(t, Z1(1, :));
-    hold on;
-    plot(t, Z2(2, :));
-    plot(t, Z2(3, :));
-    legend('7, x=0', '8, x=0', '12, x=0');
-    title('Value of Y at x=0')
-elseif problem == 2
-    figure()
-    plot(t, Y_phys(NNB(6, 1), :));
-    legend('6, x=0');
-    title('Value of Y at x=0')
 end
 
 %% Another way recover centerline
@@ -700,8 +716,8 @@ end
 % We use XSolve (i.e. the strains) with p(0, t_k), R(0, t_k) as 'initial
 % values'
 centerline_mode = "XSolve";
-% [p2, R2] = recover_position(p_ini(:, :), R_ini(:, :, :), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
 [p2, R2] = recover_position(p(:, :, 1), R(:, :, :, 1), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
+% [p2, R2] = recover_position(p_ini(:, :), R_ini(:, :, :), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
 % [p2, R2] = recover_position(pD, RD, Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
 
 %% permute space and time for the variable p
@@ -710,32 +726,19 @@ p = permute(p, [1, 3, 2]); % for plotting we need to change the order of the spa
 %% another way of computing p and R
 % centerline_mode = "TSolve";      % or "XSolve"
 % [p, R] = recover_position(p0, R0, Y_phys, NNB, centerline_t_scheme, centerline_mode, x, t, flexMat, kap);
-% [p, R] = recover_position(p0_true, R0_true, y_true, NNB_true, centerline_t_scheme, centerline_mode, xNew, t, flexMat, kap);
+%%% [p, R] = recover_position(p0_true, R0_true, y_true, NNB_true, centerline_t_scheme, centerline_mode, xNew, t, flexMat, kap);
 
 %%% ----------- plot arclength ----------- %%%
 file_name_arclength = ['fig/ARCLEN_p_', linNonlin, '_', centerline_mode, '.pdf'];
 plot_arclen(p, x, t, centerline_mode, file_name_arclength);
 file_name_arclength = ['fig/ARCLEN_p2_', linNonlin, '_', centerline_mode, '.pdf'];
 plot_arclen(p2, x, t, centerline_mode, file_name_arclength);
-
-
-% arcLength_time = zeros(Nt, 1);
-% for nn = 1:Nt
-%     arcLength_time(nn, 1) = trapz(x, sqrt(sum((gradient(p(:, :, nn), hx)).^2))); % arclength
-% end
-% f_arc = figure();
-% plot(t, arcLength_time, 'lineWidth', 2);
-% xlabel('$t$','Interpreter','latex');
-% grid on
-% title(title_arclength, 'Interpreter', 'latex');
-% %print(f_arc, file_name_arclength,'-dpdf')
-% %exportgraphics(f_arc,file_name_arclength,'ContentType','vector');
 %%% --------------------------------------- %%%
 
 %%% ----------- plot centerline ----------- %%%
-if centerline_mode == 'XSolve'
+if centerline_mode == "XSolve"
     title_centerline = 'Centerline: by space integration using $z$';
-elseif centerline_mode == 'TSolve'
+elseif centerline_mode == "TSolve"
     title_centerline = 'Centerline: by time integration using $v$';
 end
 file_name_centerline = ['CENTERL_', linNonlin, '_', centerline_mode, '.pdf'];
@@ -761,13 +764,13 @@ if plot_centerline
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         titleCenterline = 'Flying spaghetti problem 2D';
-        f_c = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        f_c1 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
         
         centerline_t = 1:(5*fact):Nt;  % time at which we plot the centerline
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         titleCenterline = 'Flying spaghetti problem 2D p2';
-        f_c = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        f_c2 = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
         
         
     elseif problem == 1
@@ -777,24 +780,24 @@ if plot_centerline
 %         viewCent = [0, 90];
 %         %viewCent = [90, 0];
 %         locLegend = 'northeastoutside';
-%         f_c = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx);
+%         f_c1 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx);
 % 
 %         centerline_t = fix([0, 2.5, 3.5, 3.8, 4.5]*100+1);
 %         viewCent = [90, 0];
 %         locLegend = 'southwest';
-%         f_c = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx);
+%         f_c2 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx);
 %         camroll(90);
         
         centerline_t = 1:(4*fact):Nt;
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
-        f_c = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        f_c3 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
     
         titleCenterline = 'Flying spaghetti problem 3D p2';
         centerline_t = 1:(4*fact):Nt;
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
-        f_c = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        f_c4 = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
     
     elseif problem == 2
         titleCenterline = 'Book p fin';
@@ -821,46 +824,10 @@ if plot_centerline
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         f_c4 = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
-        
-%         centerline_t = (5.5*10*fact+1):(5*fact):(9*10*fact+1);
-%         viewCent = [0, 90];
-%         locLegend = 'northeastoutside';
-%         f_c = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
     end
-
-%     f_c = figure();
-%     h = plot3(p0(1, :), p0(2, :), p0(3, :), 'g', 'lineWidth', 2); 
-%     hold on;
-%     %h.Color(4) = 0.5;
-%     grid on;
-%     sec = centerline_t(2);
-%     h = plot3(p(1, :, sec), p(2, :, sec), p(3, :, sec), 'k', 'lineWidth', 1);
-%     for nn = centerline_t(3:end-1)
-%         h = plot3(p(1, :, nn), p(2, :, nn), p(3, :, nn), 'k', 'lineWidth', 1);
-%         set(get(get(h,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-%     end
-%     plot3(p(1, :, end), p(2, :, end), p(3, :, end), 'r', 'lineWidth', 2);
-%     %plot3(pf(1, :), pf(2, :), pf(3, :), '--g', 'lineWidth', 3);
-% 
-%     pp = permute(p, [1, 3, 2]);
-%     plot3(pp(1, :, 1), pp(2, :, 1), pp(3, :, 1), '--b');
-%     plot3(pp(1, :, Nx), pp(2, :, Nx), pp(3, :, Nx), '--r');
-% 
-%     axis equal;
-%     view(gca, orient_cent(ii, 1), orient_cent(ii, 2));
-%     legend('$t=0$', '$t$', ['$t = ', num2str(T), '$'],...
-%         '$x=0$', '$x=\ell$','Interpreter','latex',...
-%         'Location', locLegend(ii), 'fontsize', 12);
-%     xlabel('X', 'Interpreter', 'latex');
-%     ylabel('Y', 'Interpreter', 'latex');
-%     zlabel('Z', 'Interpreter', 'latex');
-%     title('Flying spaghetti problem', 'Interpreter', 'latex', 'fontsize', 12);
-%     %exportgraphics(f_c,'flying_spaghetti.pdf','ContentType','vector')
 end
 %%% -------------------------------------- %%%
 disp('End.')
-
-
 
 
 function [res, resDagger] = Q(Y, P1, P2, P3, Pdagger1, Pdagger2, Pdagger3, Ni, Ne, Nf, NNB, diagonal)
