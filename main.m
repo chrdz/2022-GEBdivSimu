@@ -378,45 +378,52 @@ Pi2(:, NNBc(:, 1)) = eye(12);
 Proj_v2 = Pi1*Pi2;
 
 for kk=1:Nt-1  % loop over time
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % here we want to compute Y(t_{k+1}) 
+    % and at the same time R(0, t_{k+1}) in some cases
+    %-------------------------------------%
+    % Newton method: the scheme reads:
+    % zm1 = zm - (Jac Wk(zm))^{-1} Wk(zm) %
+    %-------------------------------------%
+    % Here we call:  Wm  = Wk(zm)
+    %     and        JWm = Jac Wk(zm) (Jacobian matrix)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    Yk = Y_exp(:, kk);   % Y(t_k)
+    Hk = H(:, kk, 1);    % R(0, t_k)
 
-    %%% computing Y at time k+1
-    Yk = Y_exp(:, kk);
-    Hk = H(:, kk, 1);
-
-    if linearized == true
+    if linearized == true % if the system is linearized -> no term Q(Y)Y
         Q_yk = zeros(Nf); 
         Qdagger_yk = zeros(Nf);
-    else
+    else % we conmpute the needed variables at time t_k for latter on
         [Q_yk, Qdagger_yk] = Q(Yk, P1, P2, P3, Pdagger1, Pdagger2,...
             Pdagger3, Ni, Ne, Nf, NNBc, diagonal);
     end
 
-    zm = Yk; % initialize zm
-    if approx_rot == 0 | approx_rot == 1
-        xm = Hk;
-        zxm = [zm; xm];
+    % Initializing the variable zxm for the Newton scheme below
+    zm = Yk; 
+    if approx_rot == 0 || approx_rot == 1
+        xm = Hk; zxm = [zm; xm];
     else
         zxm = zm;
     end
-%     zm = rand(Nf, 1); xm = rand(4, 1); zxm = [zm; xm];
+%     zm = rand(Nf, 1); xm = rand(4, 1); zxm = [zm; xm]; % test
 
-    Rk_tr = transpose(func_quat2rotm(Hk));
+    Rk_tr = transpose(func_quat2rotm(Hk)); % R(0, t_k)^T
 
+    % some variables involving the external forces
     fk = f_ext(t(kk), problem);    % f(t_k)
     fk1 = f_ext(t(kk+1), problem); % f(t_{k+1})
     fk1a = fk1(1:3, 1);            % f(t_k)     first 3 components
     fk1b = fk1(4:6, 1);            % f(t_{k+1}) last 3 components
+      
     JW12m_a = ht/2*U*[[Wdagger(0, fk1a), Wdagger(1, fk1a),...
         Wdagger(2, fk1a), Wdagger(3, fk1a)];...
         [Wdagger(0, fk1b), Wdagger(1, fk1b),...
         Wdagger(2, fk1b), Wdagger(3, fk1b)]];
 
+    % the Newton loop:
     while 1 
-        %%% Newton method: the scheme reads %%%
-        % zm1 = zm - (Jac Wk(zm))^{-1} Wk(zm) %
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %%% ( we call here Wm = Wk(zm) )
-
         if linearized == true
             Q_zm = zeros(Nf);          
             Qdagger_zm = zeros(Nf);
@@ -425,49 +432,46 @@ for kk=1:Nt-1  % loop over time
                 Pdagger3, Ni, Ne, Nf, NNBc, diagonal);
         end
 
-        % the most precise approach (i.e. close to the PDE system is
-        % with approx_rot = 0
+        % Computing Wm
         if approx_rot == 0 || approx_rot == 1
+            % the most precise approach (i.e. close to the PDE system) is
+            % with approx_rot = 0
             Rm_tr = transpose(func_quat2rotm(xm));            
             if problem == 0 || problem == 1
                     Fk1 = blkdiag(Rm_tr, Rm_tr)*fk1;
                     Fk =  blkdiag(Rk_tr, Rk_tr)*fk;
             elseif problem == 2
-                Fk1 = fk1;
-                Fk =  fk;
+                Fk1 = fk1; Fk =  fk;
             end   
             if approx_rot == 0
                 Fk_approx = (Fk1 + Fk)/2;
-            else    % i.e. approx_rot == 1
+            else  % i.e. approx_rot == 1
                 Fk_approx = Fk;
             end
-            if approx_rot == 0
-                W1m = (M + ht/2*K)*zm - (M - ht/2*K)*Yk +...
-                    ht/4*(Q_yk*Yk + (Q_yk + Qdagger_yk)*zm + Q_zm*zm) +...
-                    ht/2*U*( Fk1 + Fk );
-            elseif approx_rot == 1
-                W1m = (M + ht/2*K)*zm - (M - ht/2*K)*Yk +...
-                    ht/4*(Q_yk*Yk + (Q_yk + Qdagger_yk)*zm + Q_zm*zm) +...
-                    ht*U*Fk;
-            end
-
+            
+            W1m = (M + ht/2*K)*zm - (M - ht/2*K)*Yk +...
+                ht/4*(Q_yk*Yk + (Q_yk + Qdagger_yk)*zm + Q_zm*zm) +...
+                ht*U*Fk_approx;
             W2m = ( eye(4) - ht/4*func_U( Proj_v2*(zm+Yk) ))*xm -...
                 ( eye(4) + ht/4*func_U( Proj_v2*(zm+Yk) ) )*Hk;            
-
             Wm = [W1m; W2m];
 
+            % Computing Jm
             JW11m = M + ht/2*K + ht/4*(Q_yk + Qdagger_yk) +...
                 ht/4*(Q_zm + Qdagger_zm);
-            if problem == 0 | problem == 1
+            if problem == 0 || problem == 1
                 JW12m = JW12m_a*blkdiag(xm, xm, xm, xm);
-            elseif problem == 2 | approx_rot == 1
+            elseif problem == 2 || approx_rot == 1
                 JW12m = zeros(Nf, 4);
             end
             JW21m = -ht/4*func_Udagger( xm + Hk )*Proj_v2;
             JW22m = eye(4) - ht/4*func_U( Proj_v2*(zm+Yk) );            
             JWm = [[JW11m, JW12m]; [JW21m, JW22m]];
-        else
-            if problem == 0 | problem == 1
+            
+        else  % i.e. approx_rot == 2
+              % we don't look for R(0, t_k) at the same time
+              % we only look for Y(t_{t+1})
+            if problem == 0 || problem == 1
                 Fk =  blkdiag(Rk_tr, Rk_tr)*fk;           
             elseif problem == 2
                 Fk =  fk;
@@ -491,9 +495,10 @@ for kk=1:Nt-1  % loop over time
         end                                                           %
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
 
+        % update the variable zxm
         zxm = zxm1;
         zm = zxm1(1:Nf, 1);
-        if approx_rot == 0 | approx_rot == 1
+        if approx_rot == 0 || approx_rot == 1
             xm = zxm1(Nf+1:Nf+4, 1);
         end
     end
@@ -506,11 +511,12 @@ for kk=1:Nt-1  % loop over time
         Y_phys(dof, kk+1) = Y_exp(:, kk+1);
     end
     
-    if approx_rot == 0 | approx_rot == 1
+    % we just computed R(0, t_{k+1})
+    if approx_rot == 0 || approx_rot == 1
         H(:, kk+1, 1) = xm;
         R_ini(:, :, kk+1) = func_quat2rotm(xm);
 
-        % get the position information at x = 0
+        % compute p(0, t_{k+1}):
         idx = 1:kk+1;
         v1_k1 = Y_phys(NNB(1:3, 1), kk+1);
         Bxt_ini(:, kk+1) = R_ini(:, :, kk+1)*v1_k1;
@@ -520,6 +526,8 @@ for kk=1:Nt-1  % loop over time
     end
 
     %%% now we recover the position of the beam at this time k+1 %%%
+    % Careful!! this scheme for computing p and R does not seem to converge
+    % latter on we will use another method
     for ss = 1:Nx   % for all x    
         % recover physical variable
         if diagonal == true
@@ -665,7 +673,7 @@ if plot_norm == true
 end
 
 %% Y at boundary
-if problem == 0 | problem == 1
+if problem == 0 || problem == 1
     Z1 = zeros(3, Nt);
     Z2 = zeros(3, Nt);
     for kk = 1:Nt
@@ -686,22 +694,23 @@ elseif problem == 2
     title('Value of Y at x=0')
 end
 
-%% test other way recover centerline
-if true
-    centerline_mode = "XSolve";      % or "XSolve"
-%     [p2, R2] = recover_position(p_ini(:, :), R_ini(:, :, :), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
-    [p2, R2] = recover_position(p(:, :, 1), R(:, :, :, 1), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
-%     [p2, R2] = recover_position(pD, RD, Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
-end
+%% Another way recover centerline
+% Since solving for p and R using the TSolve (i.e. using velocities) does
+% not seem to give a convergent scheme, here we use another method.
+% We use XSolve (i.e. the strains) with p(0, t_k), R(0, t_k) as 'initial
+% values'
+centerline_mode = "XSolve";
+% [p2, R2] = recover_position(p_ini(:, :), R_ini(:, :, :), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
+[p2, R2] = recover_position(p(:, :, 1), R(:, :, :, 1), Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
+% [p2, R2] = recover_position(pD, RD, Y_phys, NNB, centerline_x_scheme, centerline_mode, x, t, flexMat, kap);
 
-%% permute space and time
+%% permute space and time for the variable p
 p = permute(p, [1, 3, 2]); % for plotting we need to change the order of the space and time indexes
 
-%% position of the beam through time
+%% another way of computing p and R
 % centerline_mode = "TSolve";      % or "XSolve"
 % [p, R] = recover_position(p0, R0, Y_phys, NNB, centerline_t_scheme, centerline_mode, x, t, flexMat, kap);
-% % % [p, R] = recover_position(p0_true, R0_true, y_true, NNB_true, centerline_t_scheme, centerline_mode, xNew, t, flexMat, kap);
-
+% [p, R] = recover_position(p0_true, R0_true, y_true, NNB_true, centerline_t_scheme, centerline_mode, xNew, t, flexMat, kap);
 
 %%% ----------- plot arclength ----------- %%%
 file_name_arclength = ['fig/ARCLEN_p_', linNonlin, '_', centerline_mode, '.pdf'];
