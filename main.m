@@ -79,16 +79,18 @@ centerline_x_scheme = 0;
 problem = 1;    % 0: flying spaghetti problem 2D
                 % 1: flying spaghetti problem 3D
                 % 2: book
+                % 3: TODO the feedback control problem
                 
-approx_rot = 0;    % 0 most precise mid point everywhere
+approx_rot = 0;    % 0 most precise: mid point everywhere
                    % 1 no mid point for Rfext in W1m
                    % 2 no mid point for Rfext in W1m and in calU(v2)
                 
-diagonal = true;
+diagonal = true;   % true: we diagonalize the system before solving
+                   % false: we work directly with the physical system
                              
 ell = 10;    % length of the space interval
 Ne = 20;     % number of elements
-T = 10;      % end of the time interval
+T = 5;      % end of the time interval
 ht = 0.1;   % time step
 
 %% curvature before deformation
@@ -115,9 +117,9 @@ flexMat = inv(diag([EA, GAs, GAs, GJ, EI, EI])); % the FLEXIBILITY matrix
 J = blkdiag(massMat, flexMat);
 B = zeros(12, 12); B(1:6, 7:12) = - boldE; B(7:12, 1:6) = transpose(boldE);
 A = zeros(12, 12); A(1:6, 7:12) = -eye(6); A(7:12, 1:6) = -eye(6);
-Ni = 12;      % number of PDEs
+Ni = 12;    % number of PDEs in our system
 
-%% Coeffficients of the PDE system DIAGONAL
+%% Coeffficients of the PDE system in DIAGONAL form
 if diagonal == true
     d_L = 1/sqrt(2)*[[eye(6), eye(6)]; [eye(6), -eye(6)]];
     d_Linv = d_L;
@@ -308,13 +310,12 @@ Y_exp = zeros(Nf, Nt);     % zero matrix
 H = zeros(4, Nt, Nx);      % quaternions
 R = zeros(3, 3, Nt, Nx);   % rotation matrices
 p = zeros(3, Nt, Nx);      % positions
-Y_diag = zeros(Ntot, Nt);
-Y_phys = zeros(Ntot, Nt);  
-Bxt = zeros(3, Nt, Nx);
+Y_diag = zeros(Ntot, Nt);  % diagonal variable
+Y_phys = zeros(Ntot, Nt);  % physical variable
+Bxt = zeros(3, Nt, Nx);    % matrix were we will store some information
 
-% initial conditions at t=0 for Y
+% initial conditions at t=0 for the variable Y
 Y_phys(:, 1) = Y0(:, 1);
-
 if diagonal == true
     for ss = 1:Nx 
         Y_diag(NNB(:, ss), 1)= d_L * Y_phys(NNB(:, ss), 1);
@@ -332,12 +333,12 @@ for ss = 1:Nx                                 % initial data at t=0
     Bxt(:, 1, ss) = R(:, :, 1, ss)*( Y_phys(NNB(1:3, ss), 1) );
 end
 
-% position variables for alternative solving centerline method:
-R_ini = zeros(3, 3, Nt);   % rotation matrices
-p_ini = zeros(3, Nt);      % positions
+% position/rotation variables for alternative solving centerline method:
+R_ini = zeros(3, 3, Nt);       % rotation matrices
+p_ini = zeros(3, Nt);          % positions
 Bxt_ini = zeros(3, Nt);
-R_ini(:, :, 1) = R0(:, :, 1);            % angle at t=0
-p_ini(:, 1) = p0(:, 1);                  % position at t=0
+R_ini(:, :, 1) = R0(:, :, 1);  % rotation at time t=0
+p_ini(:, 1) = p0(:, 1);        % position at time t=0
 Bxt_ini(:, 1) = R0(:, :, 1)*( Y_phys(NNB(1:3, 1), 1) );
 
 %% Solving the ODE via implicit midpoint rule
@@ -365,6 +366,8 @@ tolF=1e-13;     %-15
 
 tic
 
+% Definition of the matrices Pi1 and Pi2
+% --> v_2(x,t) = Pi1 * Pi2 * y(x,t)
 if diagonal == true
     Pi1 = 1/sqrt(2)*[zeros(3), eye(3), zeros(3), eye(3)];
 else
@@ -395,16 +398,14 @@ for kk=1:Nt-1  % loop over time
     else
         zxm = zm;
     end
-%     zm = rand(Nf, 1);
-%     xm = rand(4, 1);
-%     zxm = [zm; xm];
+%     zm = rand(Nf, 1); xm = rand(4, 1); zxm = [zm; xm];
 
     Rk_tr = transpose(func_quat2rotm(Hk));
 
-    fk = f_ext(t(kk), problem);
-    fk1 = f_ext(t(kk+1), problem);
-    fk1a = fk1(1:3, 1); 
-    fk1b = fk1(4:6, 1);
+    fk = f_ext(t(kk), problem);    % f(t_k)
+    fk1 = f_ext(t(kk+1), problem); % f(t_{k+1})
+    fk1a = fk1(1:3, 1);            % f(t_k)     first 3 components
+    fk1b = fk1(4:6, 1);            % f(t_{k+1}) last 3 components
     JW12m_a = ht/2*U*[[Wdagger(0, fk1a), Wdagger(1, fk1a),...
         Wdagger(2, fk1a), Wdagger(3, fk1a)];...
         [Wdagger(0, fk1b), Wdagger(1, fk1b),...
@@ -424,15 +425,22 @@ for kk=1:Nt-1  % loop over time
                 Pdagger3, Ni, Ne, Nf, NNBc, diagonal);
         end
 
-        if approx_rot == 0 | approx_rot == 1
+        % the most precise approach (i.e. close to the PDE system is
+        % with approx_rot = 0
+        if approx_rot == 0 || approx_rot == 1
             Rm_tr = transpose(func_quat2rotm(xm));            
-            if problem == 0 | problem == 1
+            if problem == 0 || problem == 1
                     Fk1 = blkdiag(Rm_tr, Rm_tr)*fk1;
-                    Fk =  blkdiag(Rk_tr, Rk_tr)*fk;           
+                    Fk =  blkdiag(Rk_tr, Rk_tr)*fk;
             elseif problem == 2
                 Fk1 = fk1;
                 Fk =  fk;
-            end            
+            end   
+            if approx_rot == 0
+                Fk_approx = (Fk1 + Fk)/2;
+            else    % i.e. approx_rot == 1
+                Fk_approx = Fk;
+            end
             if approx_rot == 0
                 W1m = (M + ht/2*K)*zm - (M - ht/2*K)*Yk +...
                     ht/4*(Q_yk*Yk + (Q_yk + Qdagger_yk)*zm + Q_zm*zm) +...
@@ -474,11 +482,11 @@ for kk=1:Nt-1  % loop over time
         zxm1 = zxm - JWm\Wm; 
 
         %%% M.A. code %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        rel_err = (zxm1 - zxm)./zxm;                                     %
+        rel_err = (zxm1 - zxm)./zxm;                                  %
         nan_or_inf = find( isnan(rel_err) + isinf(rel_err) ...        %
-            + (abs(zxm)<=tolzero) );                                   %
+            + (abs(zxm)<=tolzero) );                                  %
         rel_err(nan_or_inf) = 0;                                      %
-        if (norm(rel_err,inf) <= reltolX) && (norm(Wm,inf) <= tolF)%
+        if (norm(rel_err,inf) <= reltolX) && (norm(Wm,inf) <= tolF)   %
             break                                                     %
         end                                                           %
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   

@@ -1,14 +1,15 @@
 function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_centerline, x, t, flexMat, kap)
-%UNTITLED6 Summary of this function goes here
+%recover_position recovers p and R from the variable y and IC/BC
 %   Detailed explanation goes here
     % arguments: 
-    % p0, R0 initial position of the centerline
-    % Y solution 
-    % NNB node numbers 
-    % ht time step
-    % centerline_t_scheme which scheme we will use
+    % p0, R0 : initial position of the centerline
+    % Y      : solution of IGEB
+    % NNB    : node numbers 
+    % ht     : time step
+    % centerline_scheme : which scheme (mid-point, explixit-euler)
+    % type_centerline : whether we solve ODE wrt space or time
     % returns:
-    % p, R position of the beam through time
+    % p, R position of the beam through space and time
     
     Nx = length(x);
     Nt = length(t);
@@ -16,8 +17,8 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
     ht = t(2) - t(1);
 
     %% recover position of the centerline using velocities
+    % WITH TIME : using the first 6 eq. of the transformation
     if type_centerline == 'TSolve'
-        %%% WITH TIME : using the first 6 eq. of the transformation %%%
         disp('Recovering the position of the centerline (using the velocities)..')
         tic
 
@@ -34,14 +35,14 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
         % the velocoties are the first six components of y
         velocities = zeros(6, Nt, Nx); 
         for kk = 1:Nx               % for all x
-            for nn = 1:Nt%-1         % for all t
+            for nn = 1:Nt           % for all t
                 for ii = 1:6
                     velocities(ii, nn, kk) = Y(NNB(ii, kk), nn); % extract velocities
                 end
             end
         end
 
-        if centerline_scheme == 0       %%% mid point rule
+        if centerline_scheme == 0    %%% mid point rule
             for kk = 1:Nx                 % for all x
                 for nn = 1:Nt-1           % for all t
                     Axt = func_U( (velocities(4:6, nn, kk)+velocities(4:6, nn+1, kk) )/2);  % uses angular velocities  
@@ -51,7 +52,7 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
                     R(:, :, nn+1, kk) = func_quat2rotm(H(:, nn+1, kk));
                 end
             end
-        elseif centerline_scheme == 1   %%% explicit Euler (does not work properly)
+        elseif centerline_scheme == 1 %%% explicit Euler (does not work properly)
             for kk = 1:Nx                 % for all x
                 for nn = 1:Nt-1           % for all t
                     Axt = func_U( velocities(4:6, nn, kk));  % uses angular velocities  
@@ -73,7 +74,7 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
                 R(:, :, nn, kk) = func_quat2rotm(H(:, nn, kk));
             end
         end
-        elseif centerline_scheme == 3   %%% implicit euler
+        elseif centerline_scheme == 3 %%% implicit euler
             for kk = 1:Nx                 % for all x
                 for nn = 1:Nt-1           % for all t
                     Axt = func_U( velocities(4:6, nn+1, kk));  % uses angular velocities  
@@ -83,7 +84,7 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
                     R(:, :, nn+1, kk) = func_quat2rotm(H(:, nn+1, kk));
                 end
             end
-        else                              %%% Z. paper (does not work properly)
+        else                          %%% Z. paper (does not work properly)
             for kk = 1:Nx                 % for all x
                 for nn = 1:Nt-1           % for all t
                     Wm = (velocities(4:6, nn, kk)+velocities(4:6, nn+1, kk) )/2;
@@ -93,7 +94,6 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
                     bbb = [1/ht*qqq0 - 1/4*transpose(qqq)*Wm;...
                         1/ht*qqq + 1/4*(qqq0*Wm + hat(Wm)*qqq)];
                     H(:, nn+1, kk) = AAA*bbb/norm(AAA*bbb);
-                    %disp(norm(H(:, nn+1, kk)))   % test
                     R(:, :, nn+1, kk) = func_quat2rotm(H(:, nn+1, kk));
                 end
             end    
@@ -116,17 +116,17 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
         toc
     else
         %% recover position of the centerline using internal forces and moments
+        % WITH SPACE: using the last 6 eq. of the transformation
         disp('Recovering the position of the centerline (using the internal forces and moments / strains)..')
         tic
 
-        %%% WITH SPACE: using the last 6 eq. of the transformation  %%%
         H = zeros(4, Nx, Nt);     % quaternions
         R = zeros(3, 3, Nx, Nt);  % rotation matrices
         p = zeros(3, Nx, Nt);     % positions
         for nn = 1:Nt                                 % clamped at all times
-            H(:, 1, nn) = rotm2quat(R0(:, :, nn))';    % quat angle at x=0
-            R(:, :, 1, nn) = R0(:, :, nn);             % angle at x=0
-            p(:, 1, nn) = p0(:, nn);                   % position at x=0
+            H(:, 1, nn) = rotm2quat(R0(:, :, nn))';   % quat angle at x=0
+            R(:, :, 1, nn) = R0(:, :, nn);            % angle at x=0
+            p(:, 1, nn) = p0(:, nn);                  % position at x=0
         end
         % we have y(x,t) containing the velocities and strains
         % here we will just use the strains
@@ -136,9 +136,9 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
             for kk = 1:Nx%-1      % for all x
                 forces = zeros(6, 1);  
                 for ii = 7:12
-                    forces(ii-6, 1) = Y(NNB(ii, kk), nn);    % extract the forces
+                    forces(ii-6, 1) = Y(NNB(ii, kk), nn); % extract the forces
                 end
-                strains(:, kk, nn) = flexMat*forces;         % left-mult by flexMat
+                strains(:, kk, nn) = flexMat*forces; % left-mult by flexMat
             end
         end
 
@@ -147,16 +147,16 @@ function [p, R] = recover_position(p0, R0, Y, NNB, centerline_scheme, type_cente
                 for kk = 1:Nx-1      % for all x
                     Axt = func_U(strains(4:6, kk, nn)/2 + strains(4:6, kk+1, nn)/2 + kap );
                     H(:, kk+1, nn) = (eye(4) - hx/2*Axt)\((eye(4) + hx/2*Axt)*H(:, kk, nn));
-                    %R(:, :, kk+1, nn) = quat2rotm(H(:, kk+1, nn)');
+                    %R(:, :, kk+1, nn) = quat2rotm(H(:, kk+1, nn)'); %matlab function
                     R(:, :, kk+1, nn) = func_quat2rotm(H(:, kk+1, nn));
                 end
             end
-        else                         %%% euler explicit
+        else   %%% euler explicit
             for nn = 1:Nt            % for all t
                 for kk = 1:Nx-1      % for all x
                     Axt = func_U( strains(4:6, kk, nn) + kap );  
                     H(:, kk+1, nn) = (eye(4) + hx*Axt)*H(:, kk, nn);
-                    %R(:, :, kk+1, nn) = quat2rotm(H(:, kk+1, nn)');
+                    %R(:, :, kk+1, nn) = quat2rotm(H(:, kk+1, nn)'); %matlab function
                     R(:, :, kk+1, nn) = func_quat2rotm(H(:, kk+1, nn));
                 end
             end
