@@ -100,8 +100,8 @@ diagonal = true;   % true: we diagonalize the system before solving
                              
 ell = 10;    % length of the space interval
 Ne = 20;     % number of elements
-T = 5;      % end of the time interval
-ht = 0.1;   % time step
+T = 30;      % end of the time interval
+ht = 0.01;   % time step
 
 %% curvature before deformation
 kap = [0; 0; 0];  % curvature before deformation
@@ -218,25 +218,22 @@ if diagonal == true
     dof = 1:Ntot;
 else
     if problem == 0 || problem == 1 || problem == 2
+        % free beam at x=ell
         Nf = Ntot-6;
         NNBc = NNB;
         NNBc(7:12, Nx) = 0;
         dof = 1:Ntot-6;
     elseif problem == 3
+        % clamped beam at x=0
+        Nf = Ntot-6;
         NNBc = NNB-6; 
         NNBc = subplus(NNBc);
         dof = 7:Ntot;
     end
-    
+    % free beam at x=0
     % NNBc = NNB-6; % with the Dirichlet BC
     % NNBc(1:6, 1)  = 1:6;
     % NNBc(7:12, 1) = 0;
-
-    % if problem == 0 | problem == 1 | problem == 2
-    %     dof = 1:Ntot-6;     % degrees of fredom
-    % elseif problem == 3
-    %     dof = 7:Ntot;     % degrees of fredom
-    % end
 end
 
 
@@ -276,7 +273,9 @@ Y0 = zeros(Ntot, 1);
 %%% ----------- (p0, R0) and (pD, RD) ----------- %%%
 p_ref = x.*[1; 0; 0];
 
-if problem == 0 || problem == 1  
+if problem == 0 || problem == 1
+    % in problems 0 and 1 the beam is free at both ends
+    % hence there is no boundary data
     cosa = 6/10; sina = 8/10;
     p0 = [[-cosa, -sina, 0]; [sina, -cosa, 0]; [0, 0, 1]]*(p_ref)  + [6; 0; 0];
     R0 = zeros(3, 3, Nx);
@@ -284,6 +283,8 @@ if problem == 0 || problem == 1
         R0(:, :, kk) = [[-cosa, -sina, 0]; [sina, -cosa, 0]; [0, 0, 1]];
     end
 elseif problem == 2
+    % in problem 2, the beam is clamped and the angle changes with time
+    % hence we specify both the initial and boundary data
     p0 = p_ref;
     R0 = zeros(3, 3, Nx);
     for kk=1:Nx
