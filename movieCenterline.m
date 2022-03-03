@@ -1,4 +1,4 @@
-function fig = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline, t)
+function fig = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline, t, movie_name)
 %UNTITLED4 Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -8,12 +8,11 @@ function fig = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline
     create_movie = true;
     
     if create_movie
-        movie_name = 'test_movie';  % file name
 %         vidfile = VideoWriter(movie_name,'Uncompressed AVI');
         vidfile = VideoWriter(movie_name,'MPEG-4');
         vidfile.FrameRate = 10;      % change this number to slow down or speed up the movie
         open(vidfile);
-        fig=figure(2);
+        fig=figure();
         set(fig,'color','w');
     end
     
@@ -46,7 +45,7 @@ function fig = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline
     
     for nn = t_idx(1):(1/ht/10):t_idx(end)
         
-        figure(2) %%% ADD THIS HERE otherwise it will plot in fig 1 for kk>1 (because of the hold off) 
+        figure(fig) %%% ADD THIS HERE otherwise it will plot in fig 1 for kk>1 (because of the hold off) 
         
         %%% plot cross sections:
         for pp = 1:Ns
@@ -67,7 +66,7 @@ function fig = movieCenterline(p, R, t_idx, viewCent, locLegend, titleCenterline
         
         grid on;
         axis equal;
-        %view(gca, viewCent);
+        view(gca, viewCent);
         
         if x_max>x_min
             xlim([x_min, x_max]);
