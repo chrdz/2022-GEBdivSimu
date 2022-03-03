@@ -1,9 +1,9 @@
 function plot_arclen(p, x, t, centerline_mode, file_name_arclength)
 % plot arclength
 
-if centerline_mode == 'XSolve'
+if centerline_mode == "XSolve"
     title_arclength = 'Arclength: by space integration using $z$';
-elseif centerline_mode == 'TSolve'
+elseif centerline_mode == "TSolve"
     title_arclength = 'ArcLength: by time integration using $v$';
 end
 

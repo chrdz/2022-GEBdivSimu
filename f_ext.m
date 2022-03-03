@@ -17,8 +17,14 @@ function res = f_ext(t, problem)
         res(6, 1) = mom1_planar(t);
     elseif problem == 1
         res(1, 1) = -for1(t);
+        %simo version:
+        res(5, 1) = -mom2(t); % adding minus sign does note seem to change anything
         res(6, 1) = mom1(t);
-        res(5, 1) = mom2(t); % adding minus sign does note seem to change anything
+        
+%         %hesse verison TEST:
+%         res(5, 1) = -mom1(t);
+%         res(6, 1) = -mom2(t);
+        
     elseif problem == 2
         res(6, 1) = mom1_book(t);
     end

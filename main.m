@@ -84,7 +84,7 @@ centerline_x_scheme = 0;     % 0: mid point rule
                              % 1: explicit Euler (does not work properly)
 
 % Which problem do you want to solve
-problem = 1;    % 0: flying spaghetti problem 2D
+problem = 0;    % 0: flying spaghetti problem 2D
                 % 1: flying spaghetti problem 3D
                 % 2: book
                 % 3: TODO the feedback control problem
@@ -100,7 +100,7 @@ diagonal = true;   % true: we diagonalize the system before solving
                              
 ell = 10;    % length of the space interval
 Ne = 20;     % number of elements
-T = 30;      % end of the time interval
+T = 20;      % end of the time interval
 ht = 0.01;   % time step
 
 %% curvature before deformation
@@ -276,12 +276,23 @@ p_ref = x.*[1; 0; 0];
 if problem == 0 || problem == 1
     % in problems 0 and 1 the beam is free at both ends
     % hence there is no boundary data
+    
+    % simo version:
     cosa = 6/10; sina = 8/10;
     p0 = [[-cosa, -sina, 0]; [sina, -cosa, 0]; [0, 0, 1]]*(p_ref)  + [6; 0; 0];
     R0 = zeros(3, 3, Nx);
     for kk=1:Nx
         R0(:, :, kk) = [[-cosa, -sina, 0]; [sina, -cosa, 0]; [0, 0, 1]];
     end
+    
+%     % hesse version TEST:
+%     cosa = 6/10; sina = 8/10;
+%     p0 = [[-cosa, 0, -sina]; [0, 1, 0]; [sina, 0, -cosa]]*(p_ref);
+%     R0 = zeros(3, 3, Nx);
+%     for kk=1:Nx
+%         R0(:, :, kk) = [[-cosa, 0, -sina]; [0, 1, 0]; [sina, 0, -cosa]];   
+%     end
+    
 elseif problem == 2
     % in problem 2, the beam is clamped and the angle changes with time
     % hence we specify both the initial and boundary data
@@ -790,7 +801,7 @@ if plot_centerline
 %         camroll(90);
         
         centerline_t = 1:(4*fact):Nt;
-        viewCent = [0, 90];
+        viewCent = [0, 90]; % [0, 0] for x z plan
         locLegend = 'northeastoutside';
         f_c3 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
     
@@ -801,26 +812,26 @@ if plot_centerline
         f_c4 = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
     
     elseif problem == 2
-        titleCenterline = 'Book p fin';
+        titleCenterline = 'Rotating arm p fin';
         centerline_t = (5*10*fact+1):(5*fact):(9*10*fact+1);
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         f_c1 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
         
-        titleCenterline = 'Book p debut';
+        titleCenterline = 'Rotating arm p debut';
         centerline_t = 1:(5*fact):(5*10*fact+1);
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         f_c2 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
         
         
-        titleCenterline = 'Book p2 fin';
+        titleCenterline = 'Rotating arm p2 fin';
         centerline_t = (5*10*fact+1):(5*fact):(9*10*fact+1);
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         f_c3 = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
         
-        titleCenterline = 'Book p2 debut';
+        titleCenterline = 'Rotating arm p2 debut';
         centerline_t = 1:(5*fact):(5*10*fact+1);
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
