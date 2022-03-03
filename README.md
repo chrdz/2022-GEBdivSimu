@@ -7,11 +7,16 @@ Some pictures:
 
 * Rotating arm:
 
-<img src="saved-figures-and-other/book-15.gif" height="300" />
+<img src="saved-figures-and-other/rotating_arm_15_2D.gif" height="300" />
 
 * Flying spaghetti problem in 3D:
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="saved-figures-and-other/flying_spaghetti.png" alt="flying_spaghetti" height="300"/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="saved-figures-and-other/flying_spaghetti_20_3D.png" alt="flying_spaghetti_20_3D" height="300"/>
 
-<img src="saved-figures-and-other/output.gif" height="300" />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="saved-figures-and-other/flying_spaghetti_20_3D.gif" height="300" />
 
+* Flying spaghetti problem in 2D:
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="saved-figures-and-other/flying_spaghetti_20_2D.png" alt="flying_spaghetti_20_2D" height="150"/>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="saved-figures-and-other/flying_spaghetti_20_2D.gif" height="300" />
