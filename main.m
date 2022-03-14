@@ -100,7 +100,7 @@ diagonal = true;   % true: we diagonalize the system before solving
                              
 ell = 10;    % length of the space interval
 Ne = 20;     % number of elements
-T = 20;      % end of the time interval
+T = 10;      % end of the time interval
 ht = 0.01;   % time step
 
 %% curvature before deformation
@@ -141,7 +141,7 @@ if diagonal == true
     if problem == 0 || problem == 1
         d_W1 = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
         d_W2 = -d_D*[[eye(6), zeros(6)]; [eye(6), zeros(6)]];
-        d_W3 = sqrt(2)*[zeros(6); eye(6)];
+        d_W3 = -sqrt(2)*[zeros(6); eye(6)];
     elseif problem ==  2
         d_W1 = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
         d_W2 = -d_D*[[eye(6), zeros(6)]; [-eye(6), zeros(6)]];
