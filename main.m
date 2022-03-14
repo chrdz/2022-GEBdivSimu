@@ -84,7 +84,7 @@ centerline_x_scheme = 0;     % 0: mid point rule
                              % 1: explicit Euler (does not work properly)
 
 % Which problem do you want to solve
-problem = 0;    % 0: flying spaghetti problem 2D
+problem = 1;    % 0: flying spaghetti problem 2D
                 % 1: flying spaghetti problem 3D
                 % 2: book
                 % 3: TODO the feedback control problem
@@ -95,13 +95,13 @@ approx_rot = 0;    % 0 most precise: mid point everywhere
                    % 2 no mid point for Rfext in W1m and in calU(v2)
 
 % Do you want to work with the diagonal system?      
-diagonal = true;   % true: we diagonalize the system before solving
+diagonal = false;   % true: we diagonalize the system before solving
                    % false: we work directly with the physical system
                              
 ell = 10;    % length of the space interval
 Ne = 20;     % number of elements
 T = 10;      % end of the time interval
-ht = 0.01;   % time step
+ht = 0.1;   % time step
 
 %% curvature before deformation
 kap = [0; 0; 0];  % curvature before deformation
@@ -200,7 +200,7 @@ if diagonal == true
 else
     if problem == 0 || problem == 1
         for ii = 1:6
-            U(NNB(ii, 1), ii) = U(NNB(ii, 1), ii) + 1;
+            U(NNB(ii, 1), ii) = U(NNB(ii, 1), ii) - 1;
             K(NNB(ii+6, 1), NNB(ii, 1)) = K(NNB(ii+6, 1), NNB(ii, 1)) + 1;
         end
     elseif problem == 2
