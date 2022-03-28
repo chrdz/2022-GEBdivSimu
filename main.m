@@ -84,25 +84,44 @@ centerline_x_scheme = 0;     % 0: mid point rule
                              % 1: explicit Euler (does not work properly)
 
 % Which problem do you want to solve
-problem = 1;    % 0: flying spaghetti problem 2D
-                % 1: flying spaghetti problem 3D
-                % 2: book
-                % 3: TODO the feedback control problem
+problem = 3;    % 0: flying spaghetti problem 2D // i.e. Problem II - 2D
+                % 1: flying spaghetti problem 3D // i.e. Problem II - 3D
+                % 2: rotating arm problem // i.e. Problem I
+                % 3: feedback control problem // i.e. Problem III
+                
+BC = 1;   % 0: we take transparent boundary conditions (BC)
+          % 1: we take something close to transparent BC
+          % 2: we take somthing far from transparent BC   (does not work)
+          
+zeroOrderBC = false; % true: we choose the initial velocities so that the 
+                    % the zero-order compatibility conditions of the IGEB
+                    % model are fulfilled
+                    % false: the initial velocities are set to zero
 
 % How do you write the Newton scheme?
 approx_rot = 0;    % 0 most precise: mid point everywhere
                    % 1 no mid point for Rfext in W1m
                    % 2 no mid point for Rfext in W1m and in calU(v2)
+if problem == 3
+    approx_rot = 2;
+end
 
 % Do you want to work with the diagonal system?      
 diagonal = false;   % true: we diagonalize the system before solving
                    % false: we work directly with the physical system
-                             
-ell = 10;    % length of the space interval
-Ne = 20;     % number of elements
-T = 10;      % end of the time interval
-ht = 0.1;   % time step
 
+if problem == 0 || problem == 1 || problem == 2                   
+    ell = 10;    % length of the space interval
+    Ne = 20;     % number of elements
+    T = 15;      % end of the time interval
+    ht = 0.1;   % time step
+elseif problem == 3
+    ell = 1;
+    Ne = 15;
+    Tfactor = 5;
+    T = 1;         % end of the time interval
+    ht = 0.002;    % time step
+end
 %% curvature before deformation
 kap = [0; 0; 0];  % curvature before deformation
 boldE = zeros(6, 6); boldE(5, 3) = -1; boldE(6, 2) = 1;   % initial strain matrix
@@ -114,7 +133,7 @@ boldE = zeros(6, 6); boldE(5, 3) = -1; boldE(6, 2) = 1;   % initial strain matri
 % Henrik Hesse, Rafael Palacios, 2012
 % ---------------------------------------- %
 EA = 10^4; GAs = 10^4;
-if problem == 0 || problem == 1
+if problem == 0 || problem == 1 || problem == 3
     EI = 500; GJ = 500;
 elseif problem == 2
     EI = 1000; GJ = 1000;
@@ -123,11 +142,38 @@ rhoA = 1; rhoJ = diag([20, 10, 10]);
 massMat = blkdiag(rhoA*eye(3), rhoJ);            % the MASS matrix
 flexMat = inv(diag([EA, GAs, GAs, GJ, EI, EI])); % the FLEXIBILITY matrix
 
+if problem == 3 % build feedback matrix K
+    K_fb = eye(6)*flexMat^(-1/2)*massMat^(1/2); % transparent BC
+    diag_kappa = diag(K_fb);
+    mu1 = sqrt(max(diag_kappa(1:3)*min(diag_kappa(1:3))));
+    mu2 = sqrt(max(diag_kappa(4:6)*min(diag_kappa(4:6))));
+    new_kappa_diag = [mu1, mu1, mu1, mu2, mu2, mu2];
+    if BC == 1          % close to transparent BC
+        K_fb = diag(new_kappa_diag);
+    elseif BC == 2      % far from transparent BC
+        K_fb = K_fb +  diag(rand(1, 6))*diag([0.001, 0.001, 0.001, 0.1, 0.1, 0.1])*5;
+    end
+end
+
 %% Coeffficients of the PDE system
 J = blkdiag(massMat, flexMat);
 B = zeros(12, 12); B(1:6, 7:12) = - boldE; B(7:12, 1:6) = transpose(boldE);
 A = zeros(12, 12); A(1:6, 7:12) = -eye(6); A(7:12, 1:6) = -eye(6);
 Ni = 12;    % number of PDEs in our system
+
+PiMinus = [eye(6), zeros(6)];
+PiPlus = [zeros(6), eye(6)];
+if diagonal == false
+    if problem == 2 % rotating arm
+        Wa = (PiMinus') * PiPlus;
+        Wb = PiPlus';
+    elseif problem == 0 || problem == 1 % flying spaghetti
+        Wa = (PiPlus') * PiMinus;
+        Wb = -PiMinus';
+    elseif problem == 3
+        Wa = (PiMinus') * K_fb * PiMinus - (PiPlus') * PiMinus;
+    end
+end
 
 %% Coeffficients of the PDE system in DIAGONAL form
 if diagonal == true
@@ -139,13 +185,13 @@ if diagonal == true
     d_Gdagger = @(r, M, C) d_L*Gdagger(d_Linv*r, M, C)*d_Linv;
     d_B = d_L*B*d_Linv;
     if problem == 0 || problem == 1
-        d_W1 = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
-        d_W2 = -d_D*[[eye(6), zeros(6)]; [eye(6), zeros(6)]];
-        d_W3 = -sqrt(2)*[zeros(6); eye(6)];
+        d_Wa = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
+        d_Wb = -d_D*[[eye(6), zeros(6)]; [eye(6), zeros(6)]];
+        d_Wc = -sqrt(2)*[zeros(6); eye(6)];
     elseif problem ==  2
-        d_W1 = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
-        d_W2 = -d_D*[[eye(6), zeros(6)]; [-eye(6), zeros(6)]];
-        d_W3 = -sqrt(2)*[zeros(6); eye(6)];
+        d_Wa = d_D*[[zeros(6), eye(6)]; [zeros(6), eye(6)]];
+        d_Wb = -d_D*[[eye(6), zeros(6)]; [-eye(6), zeros(6)]];
+        d_Wc = -sqrt(2)*[zeros(6); eye(6)];
     end
 end
 
@@ -185,31 +231,61 @@ else
 end
 
 %% add boundary terms
-U = sparse(Ntot, 6);
+Z = sparse(Ntot, 6);
+
+% % % if diagonal == true
+% % %     for ii = 1:Ni
+% % %         for jj = 1:Ni
+% % %             K(NNB(ii, Nx), NNB(jj, Nx)) = K(NNB(ii, Nx), NNB(jj, Nx)) + d_Wa(ii, jj);
+% % %             K(NNB(ii, 1), NNB(jj, 1)) = K(NNB(ii, 1), NNB(jj, 1)) + d_Wb(ii, jj);
+% % %         end
+% % %         for jj = 1:6
+% % %             Z(NNB(ii, 1), jj) = Z(NNB(ii, 1), jj) + d_Wc(ii, jj);
+% % %         end
+% % %     end
+% % % else
+% % %     if problem == 0 || problem == 1
+% % %         for ii = 1:6
+% % %             Z(NNB(ii, 1), ii) = Z(NNB(ii, 1), ii) - 1;
+% % %             K(NNB(ii+6, 1), NNB(ii, 1)) = K(NNB(ii+6, 1), NNB(ii, 1)) + 1;
+% % %         end
+% % %     elseif problem == 2
+% % %         for ii = 1:6
+% % %             Z(NNB(ii+6, 1), ii) = Z(NNB(ii+6, 1), ii) + 1;
+% % %             K(NNB(ii, 1), NNB(ii+6, 1)) = K(NNB(ii, 1), NNB(ii+6, 1)) + 1;
+% % %         end
+% % %     end
+% % % end
 
 if diagonal == true
     for ii = 1:Ni
         for jj = 1:Ni
-            K(NNB(ii, Nx), NNB(jj, Nx)) = K(NNB(ii, Nx), NNB(jj, Nx)) + d_W1(ii, jj);
-            K(NNB(ii, 1), NNB(jj, 1)) = K(NNB(ii, 1), NNB(jj, 1)) + d_W2(ii, jj);
+            K(NNB(ii, Nx), NNB(jj, Nx)) = K(NNB(ii, Nx), NNB(jj, Nx)) + d_Wa(ii, jj);
+            K(NNB(ii, 1), NNB(jj, 1)) = K(NNB(ii, 1), NNB(jj, 1)) + d_Wb(ii, jj);
         end
         for jj = 1:6
-            U(NNB(ii, 1), jj) = U(NNB(ii, 1), jj) + d_W3(ii, jj);
+            Z(NNB(ii, 1), jj) = Z(NNB(ii, 1), jj) + d_Wc(ii, jj);
         end
     end
 else
-    if problem == 0 || problem == 1
-        for ii = 1:6
-            U(NNB(ii, 1), ii) = U(NNB(ii, 1), ii) - 1;
-            K(NNB(ii+6, 1), NNB(ii, 1)) = K(NNB(ii+6, 1), NNB(ii, 1)) + 1;
+    if problem == 0 || problem == 1 || problem == 2
+        for ii = 1:Ni
+            for jj = 1:Ni
+                K(NNB(ii, 1), NNB(jj, 1)) = K(NNB(ii, 1), NNB(jj, 1)) + Wa(ii, jj);
+            end
+            for jj = 1:6
+                Z(NNB(ii, 1), jj) = Z(NNB(ii, 1), jj) + Wb(ii, jj);
+            end
         end
-    elseif problem == 2
-        for ii = 1:6
-            U(NNB(ii+6, 1), ii) = U(NNB(ii+6, 1), ii) + 1;
-            K(NNB(ii, 1), NNB(ii+6, 1)) = K(NNB(ii, 1), NNB(ii+6, 1)) + 1;
+    elseif problem == 3
+        for ii = 1:Ni
+            for jj = 1:Ni
+                K(NNB(ii, Nx), NNB(jj, Nx)) = K(NNB(ii, Nx), NNB(jj, Nx)) + Wa(ii, jj);
+            end
         end
     end
 end
+    
 
 %% enforce Dirichlet boundary conditions if needed
 if diagonal == true
@@ -237,7 +313,7 @@ else
 end
 
 
-M = M(dof, dof); K = K(dof, dof); U = U(dof, :); 
+M = M(dof, dof); K = K(dof, dof); Z = Z(dof, :); 
 for pp = 1:Ni
     for ee = 1:Ne
         temp1 = cell2mat(P1(pp, ee)); P1(pp, ee) = {temp1(dof, dof)};
@@ -254,8 +330,39 @@ disp('Building the initial data..')
 tic
 
 %%% ------------------- Y0 ---------------------- %%%
-Y0 = zeros(Ntot, 1);
-
+if problem == 0 || problem == 1 || problem == 2
+    Y0 = zeros(Ntot, 1);
+elseif problem == 3
+    Gamma0 = [0; 0; 0];    % there is no initial shear
+    W0hat = [0, -1/sqrt(2), 0; 1/sqrt(2), 0, 1/sqrt(2); 0, -1/sqrt(2), 0];
+    Upsilon0 = func_vec(W0hat);
+    z0 = [Gamma0; Upsilon0];  % strains
+    z0 = flexMat\z0;          % corresponding stresses
+    v0_ell = - K_fb\z0;      % velocities at ell fulfilling 
+                              % compatibility conditions at x = ell
+    %%% imposes zero-order comp. cond + null acceleration at x=0:
+    y0Mat = zeros(12, Nx);
+    if zeroOrderBC == true
+        for ii = 1:6
+            x_constr = [0, 0.05, ell-0.05, ell];
+            y_constr = [0, 0, v0_ell(ii), v0_ell(ii)];
+            v0_interp = pchip(x_constr, y_constr, x);
+            for kk = 1:Nx
+                y0Mat(ii, :) = v0_interp;
+            end
+        end
+    end
+    for kk = 1:Nx
+        y0Mat(7:12, kk) = z0;
+    end
+    %%% transform y0Mat to a vector:
+    Y0 = zeros(Ntot, 1);
+    for ii = 1:Ni
+        for kk = 1 : Nx
+            Y0(NNB(ii, kk), 1) = y0Mat(ii, kk);
+        end
+    end
+end
 %%% meaningless initial data %%%
 % x0 = 0.5*ell;   % center
 % a = 0.2*ell;    % width
@@ -309,7 +416,26 @@ elseif problem == 2
     pD = zeros(3, Nt);
     for nn = 1:Nt
         RD(:, :, nn) = RR(func_theta(t(nn)));
-    end      
+    end
+    
+elseif problem == 3
+    syms eta;     
+    p0_syms = 1/sqrt(2)*[eta; (1-cos(eta)); sin(eta)];
+    R0_syms = [[1/sqrt(2), 0, -1/sqrt(2)]; 
+               [sin(eta)/sqrt(2), cos(eta), sin(eta)/sqrt(2)];
+               [cos(eta)/sqrt(2), -sin(eta), cos(eta)/sqrt(2)]];
+    p0 = zeros(3, Nx);
+    R0 = zeros(3, 3, Nx);
+    for kk=1:Nx
+        p0(:, kk) = subs(p0_syms, x(kk));
+        R0(:, :, kk) = subs(R0_syms, x(kk));
+    end
+    RD = zeros(3, 3, Nt);
+    pD = zeros(3, Nt);
+    for nn = 1:Nt
+        pD(:, nn) = p0(:, 1);
+        RD(:, :, nn) = R0(:, :, 1);
+    end
 end
 
 %%% test of the function func_theta
@@ -392,16 +518,18 @@ tolF=1e-13;     %-15
 
 tic
 
-% Definition of the matrices Pi1 and Pi2
-% --> v_2(x,t) = Pi1 * Pi2 * y(x,t)
-if diagonal == true
-    Pi1 = 1/sqrt(2)*[zeros(3), eye(3), zeros(3), eye(3)];
-else
-    Pi1 = [zeros(3), eye(3), zeros(3), zeros(3)];
+if approx_rot == 0 || approx_rot == 1
+    % Definition of the matrices Pi1 and Pi2
+    % --> v_2(x,t) = Pi1 * Pi2 * y(x,t)
+    if diagonal == true
+        Pi1 = 1/sqrt(2)*[zeros(3), eye(3), zeros(3), eye(3)];
+    else
+        Pi1 = [zeros(3), eye(3), zeros(3), zeros(3)];
+    end
+    Pi2 = zeros(12, Nf);
+    Pi2(:, NNBc(:, 1)) = eye(12);
+    Proj_v2 = Pi1*Pi2;
 end
-Pi2 = zeros(12, Nf);
-Pi2(:, NNBc(:, 1)) = eye(12);   
-Proj_v2 = Pi1*Pi2;
 
 for kk=1:Nt-1  % loop over time
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -421,16 +549,16 @@ for kk=1:Nt-1  % loop over time
     if linearized == true % if the system is linearized -> no term Q(Y)Y
         Q_yk = zeros(Nf); 
         Qdagger_yk = zeros(Nf);
-    else % we conmpute the needed variables at time t_k for latter on
+    else % we compute the needed variables at time t_k for latter on
         [Q_yk, Qdagger_yk] = Q(Yk, P1, P2, P3, Pdagger1, Pdagger2,...
-            Pdagger3, Ni, Ne, Nf, NNBc, diagonal);
+            Pdagger3, Ni, Ne, Nf, NNBc, diagonal, problem);
     end
 
     % Initializing the variable zxm for the Newton scheme below
     zm = Yk; 
     if approx_rot == 0 || approx_rot == 1
         xm = Hk; zxm = [zm; xm];
-    else
+    else % i.e. approx_rot == 2
         zxm = zm;
     end
 %     zm = rand(Nf, 1); xm = rand(4, 1); zxm = [zm; xm]; % test
@@ -443,7 +571,7 @@ for kk=1:Nt-1  % loop over time
     fk1a = fk1(1:3, 1);            % f(t_k)     first 3 components
     fk1b = fk1(4:6, 1);            % f(t_{k+1}) last 3 components
       
-    JW12m_a = ht/2*U*[[Wdagger(0, fk1a), Wdagger(1, fk1a),...
+    JW12m_a = ht/2*Z*[[Wdagger(0, fk1a), Wdagger(1, fk1a),...
         Wdagger(2, fk1a), Wdagger(3, fk1a)];...
         [Wdagger(0, fk1b), Wdagger(1, fk1b),...
         Wdagger(2, fk1b), Wdagger(3, fk1b)]];
@@ -455,13 +583,13 @@ for kk=1:Nt-1  % loop over time
             Qdagger_zm = zeros(Nf);
         else
             [Q_zm, Qdagger_zm] = Q(zm, P1, P2, P3, Pdagger1, Pdagger2,...
-                Pdagger3, Ni, Ne, Nf, NNBc, diagonal);
+                Pdagger3, Ni, Ne, Nf, NNBc, diagonal, problem);
         end
 
         % Computing Wm
-        if approx_rot == 0 || approx_rot == 1
-            % the most precise approach (i.e. close to the PDE system) is
-            % with approx_rot = 0
+        if approx_rot == 0 || approx_rot == 1 % only for problem == 0,1 or 2
+            % for problem == 0 or 1, the most precise approach (i.e. close
+            % to the PDE system) is with approx_rot = 0
             Rm_tr = transpose(func_quat2rotm(xm));            
             if problem == 0 || problem == 1
                     Fk1 = blkdiag(Rm_tr, Rm_tr)*fk1;
@@ -477,7 +605,7 @@ for kk=1:Nt-1  % loop over time
             
             W1m = (M + ht/2*K)*zm - (M - ht/2*K)*Yk +...
                 ht/4*(Q_yk*Yk + (Q_yk + Qdagger_yk)*zm + Q_zm*zm) +...
-                ht*U*Fk_approx;
+                ht*Z*Fk_approx;
             W2m = ( eye(4) - ht/4*func_U( Proj_v2*(zm+Yk) ))*xm -...
                 ( eye(4) + ht/4*func_U( Proj_v2*(zm+Yk) ) )*Hk;            
             Wm = [W1m; W2m];
@@ -501,10 +629,12 @@ for kk=1:Nt-1  % loop over time
                 Fk =  blkdiag(Rk_tr, Rk_tr)*fk;           
             elseif problem == 2
                 Fk =  fk;
+            elseif problem == 3
+                Fk = zeros(6, 1);
             end
             Wm = (M + ht/2*K)*zm - (M - ht/2*K)*Yk +...
                     ht/4*(Q_yk*Yk + (Q_yk + Qdagger_yk)*zm + Q_zm*zm) +...
-                    ht*U*Fk;
+                    ht*Z*Fk;
             JWm = M + ht/2*K + ht/4*(Q_yk + Qdagger_yk) +...
                 ht/4*(Q_zm + Qdagger_zm);
         end
@@ -553,7 +683,7 @@ for kk=1:Nt-1  % loop over time
 
     %%% now we recover the position of the beam at this time k+1 %%%
     % Careful!! this scheme for computing p and R does not seem to converge
-    % latter on we will use another method
+    % for problem == 0, 1, 2. Hence, latter on we will use another method
     for ss = 1:Nx   % for all x    
         % recover physical variable
         if diagonal == true
@@ -741,21 +871,15 @@ p = permute(p, [1, 3, 2]); % for plotting we need to change the order of the spa
 %%% [p, R] = recover_position(p0_true, R0_true, y_true, NNB_true, centerline_t_scheme, centerline_mode, xNew, t, flexMat, kap);
 
 %%% ----------- plot arclength ----------- %%%
+centerline_mode = "TSolve";
 file_name_arclength = ['fig/ARCLEN_p_', linNonlin, '_', centerline_mode, '.pdf'];
 plot_arclen(p, x, t, centerline_mode, file_name_arclength);
+centerline_mode = "XSolve";
 file_name_arclength = ['fig/ARCLEN_p2_', linNonlin, '_', centerline_mode, '.pdf'];
 plot_arclen(p2, x, t, centerline_mode, file_name_arclength);
 %%% --------------------------------------- %%%
 
 %%% ----------- plot centerline ----------- %%%
-if centerline_mode == "XSolve"
-    title_centerline = 'Centerline: by space integration using $z$';
-elseif centerline_mode == "TSolve"
-    title_centerline = 'Centerline: by time integration using $v$';
-end
-file_name_centerline = ['CENTERL_', linNonlin, '_', centerline_mode, '.pdf'];
-
-
 %pf = zeros(3, Nx); % the undeformed configuration fulfilling the clamped BC
 % temp = R0(:, 1, 1);
 % for kk = 1:Nx
@@ -836,13 +960,39 @@ if plot_centerline
         viewCent = [0, 90];
         locLegend = 'northeastoutside';
         f_c4 = plotCenterline(p2, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        
+    elseif problem == 3
+        titleCenterline = 'Feedback control p - view 1';
+        centerline_t = 1:(15*fact):Nt;
+        locLegend = "southeast";
+        viewCent = [96, 10];
+        f_c1 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        
+        titleCenterline = 'Feedback control p - view 2';
+        locLegend = "northwest";
+        viewCent = [-37.5, 30];
+        f_c2 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        
+        
+        titleCenterline = 'Feedback control p2 - view 1';
+        centerline_t = 1:(15*fact):Nt;
+        locLegend = "southeast";
+        viewCent = [96, 10];
+        f_c3 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
+        
+        titleCenterline = 'Feedback control p2 - view 2';
+        locLegend = "northwest";
+        viewCent = [-37.5, 30];
+        f_c4 = plotCenterline(p, centerline_t, viewCent, locLegend, titleCenterline, Nx, t);
     end
 end
 %%% -------------------------------------- %%%
 disp('End.')
 
 
-function [res, resDagger] = Q(Y, P1, P2, P3, Pdagger1, Pdagger2, Pdagger3, Ni, Ne, Nf, NNB, diagonal)
+
+%% definition of Q
+function [res, resDagger] = Q(Y, P1, P2, P3, Pdagger1, Pdagger2, Pdagger3, Ni, Ne, Nf, NNB, diagonal, problem)
 % Q computes both Q and Q_dagger
 % both are of size Nf x Nf
     res=zeros(Nf); resDagger=zeros(Nf);
@@ -859,30 +1009,58 @@ function [res, resDagger] = Q(Y, P1, P2, P3, Pdagger1, Pdagger2, Pdagger3, Ni, N
             end
         end
     else
-        for pp=1:6
-            for ee=1:Ne
-                res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
-                          + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee)) ...
-                          + Y(NNB(pp, 2*ee+1))*cell2mat(P3(pp, ee));
-                resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
-                                      + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee)) ...
-                                      + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger3(pp, ee));
+        if problem == 0 || problem == 1 || problem == 2
+            for pp=1:6
+                for ee=1:Ne
+                    res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee+1))*cell2mat(P3(pp, ee));
+                    resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger3(pp, ee));
+                end
             end
-        end
-        for pp=7:Ni
-            for ee = 1:Ne-1
+            for pp=7:Ni
+                for ee = 1:Ne-1
+                    res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee+1))*cell2mat(P3(pp, ee));
+                    resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger3(pp, ee));
+                end
+                ee=Ne;
                 res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
-                          + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee)) ...
-                          + Y(NNB(pp, 2*ee+1))*cell2mat(P3(pp, ee));
+                          + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee));
                 resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
-                                      + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee)) ...
-                                      + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger3(pp, ee));
+                                      + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee));
             end
-            ee=Ne;
-            res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
-                      + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee));
-            resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
-                                  + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee));
+        elseif problem == 3
+            for pp=1:6
+                for ee = 2:Ne
+                    res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee+1))*cell2mat(P3(pp, ee));
+                    resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger3(pp, ee));
+                end
+                ee=1;
+                res = res + Y(NNB(pp, 2*ee))*cell2mat(P1(pp, ee)) ...
+                          + Y(NNB(pp, 2*ee+1))*cell2mat(P2(pp, ee));
+                resDagger = resDagger + Y(NNB(pp, 2*ee))*cell2mat(Pdagger1(pp, ee)) ...
+                                      + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger2(pp, ee));
+            end
+            for pp=7:Ni
+                for ee=1:Ne
+                    res = res + Y(NNB(pp, 2*ee-1))*cell2mat(P1(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee))*cell2mat(P2(pp, ee)) ...
+                              + Y(NNB(pp, 2*ee+1))*cell2mat(P3(pp, ee));
+                    resDagger = resDagger + Y(NNB(pp, 2*ee-1))*cell2mat(Pdagger1(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee))*cell2mat(Pdagger2(pp, ee)) ...
+                                          + Y(NNB(pp, 2*ee+1))*cell2mat(Pdagger3(pp, ee));
+                end
+            end
         end
     end
 end
